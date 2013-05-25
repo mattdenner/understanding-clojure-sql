@@ -38,10 +38,28 @@
     (dml/database db))
 
   ; Once you have an entity you can do some DB stuff ...
+  (facts "insert"
+         (dml-db/transaction
+           (fact "inserts one or more entries"
+                 (-> (dml/insert* entries) (dml/values {:id 1, :name "foo"}) (dml/insert))                        => nil
+                 (-> (dml/insert* entries) (dml/values [{:id 2, :name "bar"} {:id 3, :name "bar"}]) (dml/insert)) => nil)
+
+           (dml-db/rollback))
+         )
+
   (facts "select"
-         (fact "can be built by threading"
-               (-> (dml/select* entries) (dml/as-sql)) => "SELECT \"entries\".* FROM \"entries\""
-               (-> (dml/select* entries) (dml/select)) => [])
+         (dml-db/transaction
+           (-> (dml/insert* entries)
+               (dml/values [{:id 1, :name "foo"}  {:id 2, :name "bar"} {:id 3, :name "baz"}])
+               (dml/insert))
+
+           (fact "can be built by threading"
+                 (-> (dml/select* entries) (dml/as-sql))                             => "SELECT \"entries\".* FROM \"entries\""
+                 (-> (dml/select* entries) (dml/select))                             => [{:id 1, :name "foo"} {:id 2, :name "bar"} {:id 3, :name "baz"}]
+                 (-> (dml/select* entries) (dml/order :id :desc) (dml/select))       => [{:id 3, :name "baz"} {:id 2, :name "bar"} {:id 1, :name "foo"}]
+                 (-> (dml/select* entries) (dml/where (= :name "foo")) (dml/select)) => [{:id 1, :name "foo"}])
+
+           (dml-db/rollback))
          )
   )
 
