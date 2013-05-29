@@ -27,37 +27,69 @@
 (defn korma-test [db]
   ; We need a DB schema setup for korma so lobos can do that for us:
   (ddl-core/create
-    (ddl-schema/table :entries
+    (ddl-schema/table :owners
                       (ddl-schema/integer :id :primary-key)
-                      (ddl-schema/varchar :name 100))) 
+                      (ddl-schema/varchar :name 100)))
+  (ddl-core/create
+    (ddl-schema/table :pets
+                      (ddl-schema/integer :id :primary-key)
+                      (ddl-schema/integer :owners_id [:refer :owners :id])
+                      (ddl-schema/varchar :name 100)))
+
+  ; Because you want to refer to entities from entities you need to declare them
+  (declare owner pet)
 
   ; Korma allows you to define an "entity" which represents a table in the DB.  It reflects
   ; the Rails ActiveRecord in some ways in that it allows you to follow a convention for the
   ; column names and get a lot for free.
-  (dml/defentity entries
-    (dml/database db))
+  (dml/defentity owner
+    (dml/database db)
+    (dml/table :owners)
+    (dml/has-many pet))
+  (dml/defentity pet
+    (dml/database db)
+    (dml/table :pets)
+    (dml/belongs-to owner))
 
   ; Once you have an entity you can do some DB stuff ...
   (facts "insert"
          (dml-db/transaction
            (fact "inserts one or more entries"
-                 (-> (dml/insert* entries) (dml/values {:id 1, :name "foo"}) (dml/insert))                        => nil
-                 (-> (dml/insert* entries) (dml/values [{:id 2, :name "bar"} {:id 3, :name "bar"}]) (dml/insert)) => nil)
+                 (-> (dml/insert* owner) (dml/values {:id 1, :name "foo"}) (dml/insert))                        => nil
+                 (-> (dml/insert* owner) (dml/values [{:id 2, :name "bar"} {:id 3, :name "bar"}]) (dml/insert)) => nil)
 
            (dml-db/rollback))
          )
 
   (facts "select"
          (dml-db/transaction
-           (-> (dml/insert* entries)
+           (-> (dml/insert* owner)
                (dml/values [{:id 1, :name "foo"}  {:id 2, :name "bar"} {:id 3, :name "baz"}])
                (dml/insert))
+           (-> (dml/insert* pet)
+               (dml/values [{:id 1, :owners_id 1, :name "frood"}])
+               (dml/insert)
+               )
 
            (fact "can be built by threading"
-                 (-> (dml/select* entries) (dml/as-sql))                             => "SELECT \"entries\".* FROM \"entries\""
-                 (-> (dml/select* entries) (dml/select))                             => [{:id 1, :name "foo"} {:id 2, :name "bar"} {:id 3, :name "baz"}]
-                 (-> (dml/select* entries) (dml/order :id :desc) (dml/select))       => [{:id 3, :name "baz"} {:id 2, :name "bar"} {:id 1, :name "foo"}]
-                 (-> (dml/select* entries) (dml/where (= :name "foo")) (dml/select)) => [{:id 1, :name "foo"}])
+                 (-> (dml/select* owner) (dml/as-sql))                             => "SELECT \"owners\".* FROM \"owners\""
+                 (-> (dml/select* owner) (dml/select))                             => [{:id 1, :name "foo"} {:id 2, :name "bar"} {:id 3, :name "baz"}]
+                 (-> (dml/select* owner) (dml/order :id :desc) (dml/select))       => [{:id 3, :name "baz"} {:id 2, :name "bar"} {:id 1, :name "foo"}]
+                 (-> (dml/select* owner) (dml/where (= :name "foo")) (dml/select)) => [{:id 1, :name "foo"}])
+
+           (facts "can include joins"
+                  (fact "with belongs-to or has-one use fields to rename the joined field names"
+                        (-> (dml/select* pet) (dml/with owner (dml/fields :name)) (dml/select))                => [{:id 1, :name "frood", :owners_id 1, :name_2 "foo"}]
+                        (-> (dml/select* pet) (dml/with owner (dml/fields [:name :owners_name])) (dml/select)) => [{:id 1, :name "frood", :owners_id 1, :owners_name "foo"}]
+                        )
+                  (fact "with has-many you automatically get an array"
+                        (-> (dml/select* owner) (dml/with pet) (dml/select)) => [
+                                                                                 {:id 1, :name "foo", :pets [{:id 1, :name "frood", :owners_id 1}]}
+                                                                                 {:id 2, :name "bar", :pets []}
+                                                                                 {:id 3, :name "baz", :pets []}
+                                                                                 ]
+                        )
+                 )
 
            (dml-db/rollback))
          )
