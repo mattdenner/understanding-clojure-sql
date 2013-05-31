@@ -16,11 +16,11 @@
     ; Both lobos and korma need a connection, but they won't cooperate in how they do this by
     ; the looks of it.  Therefore we have to do both, although I guess JNDI would be the common
     ; solution.
-    (ddl-connect/open-global :lobos-connection db-details)
+    (ddl-connect/open-global :korma-test-connection db-details)
     (dml-db/defdb db db-details)
 
     ; Now we can execute the callback with lobos and korma configured
-    (ddl-connect/with-connection :lobos-connection (callback db))
+    (ddl-connect/with-connection :korma-test-connection (callback db))
     )
   )
 
