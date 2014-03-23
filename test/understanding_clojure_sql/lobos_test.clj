@@ -22,47 +22,46 @@
   (clojure.set/intersection #{"table-1" "table-2" "table-3"}
                             (set (map :TABLE_NAME (dml/exec-raw "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES" :results)))))
 
-(defn lobos-test []
-  (facts "lobos"
-         (facts "migrations"
-                (fact "all migrations can be executed at once"
-                      (dump-tables-after (ddl-core/migrate))       => #{"table-1" "table-2" "table-3"}
+(defn migrations-test []
+  (facts "migrations"
+         (fact "all migrations can be executed at once"
+               (dump-tables-after (ddl-core/migrate))       => #{"table-1" "table-2" "table-3"}
+               (dump-tables-after (ddl-core/rollback :all)) => #{})
+
+         (facts "up"
+                (fact "by name"
+                      (dump-tables-after (ddl-core/migrate "create-table-1")) => #{"table-1"}
+                      (dump-tables-after (ddl-core/migrate "create-table-2")) => #{"table-1" "table-2"}
+                      (dump-tables-after (ddl-core/migrate "create-table-3")) => #{"table-1" "table-2" "table-3"}
                       (dump-tables-after (ddl-core/rollback :all)) => #{})
 
-                (facts "up"
-                       (fact "by name"
-                             (dump-tables-after (ddl-core/migrate "create-table-1")) => #{"table-1"}
-                             (dump-tables-after (ddl-core/migrate "create-table-2")) => #{"table-1" "table-2"}
-                             (dump-tables-after (ddl-core/migrate "create-table-3")) => #{"table-1" "table-2" "table-3"}
-                             (dump-tables-after (ddl-core/rollback :all)) => #{})
-
-                       (fact "by name and a different order"
-                             (dump-tables-after (ddl-core/migrate "create-table-2")) => #{"table-2"}
-                             (dump-tables-after (ddl-core/migrate "create-table-1")) => #{"table-1" "table-2"}
-                             (dump-tables-after (ddl-core/migrate "create-table-3")) => #{"table-1" "table-2" "table-3"}
-                             (dump-tables-after (ddl-core/rollback :all)) => #{})
-                       )
-
-                (facts "down"
-                       (fact "you can rollback migrations piecemeal"
-                             (dump-tables-after (ddl-core/migrate))  => #{"table-1" "table-2" "table-3"}
-                             (dump-tables-after (ddl-core/rollback)) => #{"table-1" "table-2"}
-                             (dump-tables-after (ddl-core/rollback)) => #{"table-1"}
-                             (dump-tables-after (ddl-core/rollback)) => #{})
-
-                       (fact "you can rollback a number of migrations"
-                             (dump-tables-after (ddl-core/migrate))    => #{"table-1" "table-2" "table-3"}
-                             (dump-tables-after (ddl-core/rollback 2)) => #{"table-1"}
-                             (dump-tables-after (ddl-core/rollback))   => #{})
-
-                       (fact "rollback can be by name"
-                             (dump-tables-after (ddl-core/migrate))                   => #{"table-1" "table-2" "table-3"}
-                             (dump-tables-after (ddl-core/rollback "create-table-2")) => #{"table-1" "table-3"}
-                             (dump-tables-after (ddl-core/rollback "create-table-1")) => #{"table-3"}
-                             (dump-tables-after (ddl-core/rollback "create-table-3")) => #{})
-                       )
+                (fact "by name and a different order"
+                      (dump-tables-after (ddl-core/migrate "create-table-2")) => #{"table-2"}
+                      (dump-tables-after (ddl-core/migrate "create-table-1")) => #{"table-1" "table-2"}
+                      (dump-tables-after (ddl-core/migrate "create-table-3")) => #{"table-1" "table-2" "table-3"}
+                      (dump-tables-after (ddl-core/rollback :all)) => #{})
                 )
-         )
-  )
 
-(with-test-db lobos-test)
+         (facts "down"
+                (fact "you can rollback migrations piecemeal"
+                      (dump-tables-after (ddl-core/migrate))  => #{"table-1" "table-2" "table-3"}
+                      (dump-tables-after (ddl-core/rollback)) => #{"table-1" "table-2"}
+                      (dump-tables-after (ddl-core/rollback)) => #{"table-1"}
+                      (dump-tables-after (ddl-core/rollback)) => #{})
+
+                (fact "you can rollback a number of migrations"
+                      (dump-tables-after (ddl-core/migrate))    => #{"table-1" "table-2" "table-3"}
+                      (dump-tables-after (ddl-core/rollback 2)) => #{"table-1"}
+                      (dump-tables-after (ddl-core/rollback))   => #{})
+
+                (fact "rollback can be by name"
+                      (dump-tables-after (ddl-core/migrate))                   => #{"table-1" "table-2" "table-3"}
+                      (dump-tables-after (ddl-core/rollback "create-table-2")) => #{"table-1" "table-3"}
+                      (dump-tables-after (ddl-core/rollback "create-table-1")) => #{"table-3"}
+                      (dump-tables-after (ddl-core/rollback "create-table-3")) => #{})
+                )
+         ))
+
+(facts "lobos"
+       (with-test-db migrations-test)
+       )
